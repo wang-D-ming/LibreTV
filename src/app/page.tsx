@@ -1,7 +1,8 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { useSearchSession } from '@/lib/search-session';
 import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/header';
 import { RecommendSection } from '@/components/douban-section';
@@ -20,7 +21,7 @@ import { SourcePicker } from '@/components/source-picker';
 import { CategoryBrowser } from '@/components/category-browser';
 
 /**
- * 首页：搜索（URL ?s= 驱动，可后退/分享）+ 豆瓣推荐。
+ * 首页：页面内搜索 + 分类与频道入口。
  * 搜索状态由 React Query 管理，失败源在结果区顶部以非阻塞方式展示。
  */
 /** 搜索结果分批渲染的批大小：一次挂载上千张卡片会明显掉帧 */
@@ -35,11 +36,11 @@ export default function HomePage() {
 }
 
 function HomeContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
   const { toast } = useToast();
-  const urlQuery = searchParams.get('s') || '';
-  const searchMode = searchParams.get('mode') === 'title' ? 'title' : 'smart';
+  const urlQuery = useSearchSession(s => s.query);
+  const searchMode = useSearchSession(s => s.mode);
+  const setQuery = useSearchSession(s => s.setQuery);
+  const setMode = useSearchSession(s => s.setMode);
   // 精确订阅所需字段（对齐 live 页的做法）：搜索流式期间逐源写健康度、
   // 打开设置抽屉/历史面板等无关 store 变化，都不应触发首页整树重渲染
   const customAPIs = useAppStore((s) => s.customAPIs);
@@ -55,10 +56,17 @@ function HomeContent() {
   const [streamedOutcomes, setStreamedOutcomes] = useState<SourceSearchOutcome[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // URL 驱动搜索：?s= 变化时回填输入框
+  // 顶栏发起的搜索也同步到首页输入框。
   useEffect(() => {
-    if (urlQuery) setInput(urlQuery);
+    setInput(urlQuery);
   }, [urlQuery]);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('s') || url.searchParams.has('mode')) {
+      url.searchParams.delete('s'); url.searchParams.delete('mode');
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    }
+  }, []);
 
   // 源名回显：失败/停用提示里显示友好名称而非裸 key
   const sourceName = (key: string) =>
@@ -97,7 +105,7 @@ function HomeContent() {
   const searchQuery = useQuery({
     queryKey: ['search', urlQuery, searchMode, selectedKeys.map((key) => resolveSource({ customAPIs, envSources }, key)), yellowFilter,
       subscriptions.map(({ url, enabled }) => ({ url, enabled }))],
-    // 与 runSearch 的截断规则保持一致：顶栏搜索 / 手动构造长链接不会绕过上限
+    // 与顶栏搜索保持相同长度上限。
     queryFn: ({ signal }) => {
       setStreamedOutcomes([]);
       return api.search(urlQuery.slice(0, 100), selectedSources, yellowFilter, {
@@ -136,7 +144,7 @@ function HomeContent() {
       toast('请在搜索框下方刷新数据源并勾选一个源', 'warning');
       return;
     }
-    router.push(`/?s=${encodeURIComponent(query)}&mode=${searchMode}`, { scroll: false });
+    setQuery(query);
     searchHistory.record(query);
   };
 
@@ -174,6 +182,10 @@ function HomeContent() {
       <Header />
 
       <main className="relative flex-1 max-w-6xl w-full mx-auto px-4 py-6">
+        <Link href="/telegram" className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-accent/50 bg-gradient-to-r from-accent/20 to-surface-raised px-5 py-5 shadow-lg hover:border-accent transition-colors" aria-label="进入频道短剧">
+          <div><span className="text-xs font-semibold text-accent">新上线 · 免 Telegram 登录</span><h2 className="mt-1 text-2xl font-bold text-content">频道短剧 · AI 漫剧</h2><p className="mt-2 text-sm text-muted">浏览频道更新，选择剧集直接播放</p></div>
+          <span className="btn-primary shrink-0 self-start sm:self-center">进入频道短剧 →</span>
+        </Link>
         {/* 首屏氛围渐变 */}
         {!urlQuery && (
           <div
@@ -248,6 +260,7 @@ function HomeContent() {
                     className="shrink-0 self-center mr-1 p-1.5 rounded-full text-faint hover:text-content hover:bg-hover transition-colors"
                     onClick={() => {
                       setInput('');
+                      setQuery('');
                       searchHistory.resetActive();
                       inputRef.current?.focus();
                     }}
@@ -285,7 +298,7 @@ function HomeContent() {
             )}
           </div>
           <div className="mt-3 flex gap-3" role="group" aria-label="搜索方式">
-            {(['smart', 'title'] as const).map(mode => <button key={mode} type="button" aria-pressed={searchMode === mode} className={searchMode === mode ? 'text-sm text-accent font-semibold' : 'text-sm text-muted'} onClick={() => router.push('/?' + new URLSearchParams({ ...(urlQuery ? { s: urlQuery } : {}), mode }), { scroll: false })}>{mode === 'smart' ? '智能搜索' : '片名搜索'}</button>)}
+            {(['smart', 'title'] as const).map(mode => <button key={mode} type="button" aria-pressed={searchMode === mode} className={searchMode === mode ? 'text-sm text-accent font-semibold' : 'text-sm text-muted'} onClick={() => setMode(mode)}>{mode === 'smart' ? '智能搜索' : '片名搜索'}</button>)}
           </div>
           {searchMode === 'smart' && <p className="mt-2 text-xs text-muted max-w-2xl text-center">按常见题材同义词、简介、类型、演员和导演匹配。搜索范围为源站返回及近期搜索内容，并非全片库；可尝试“搞笑的电影”“周星驰主演的喜剧”。</p>}
           <SourcePicker />

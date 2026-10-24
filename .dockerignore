@@ -10,6 +10,9 @@ tsconfig.tsbuildinfo
 .github
 
 # 本地环境与日志
+.local
+LOCAL-README.txt
+Start-LibreTV.cmd
 .env
 .env*.local
 *.log

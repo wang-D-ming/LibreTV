@@ -26,6 +26,8 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
+RUN mkdir -p /app/.local && chown nextjs:nodejs /app/.local
+
 USER nextjs
 
 EXPOSE 8080

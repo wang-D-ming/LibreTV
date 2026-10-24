@@ -10,6 +10,7 @@ import { requestShowDownloadManager } from './download-manager';
 import { Icon } from './icon';
 import { SearchHistoryDropdown, useSearchHistory } from './search-history';
 import { cn } from '@/lib/utils';
+import { useSearchSession } from '@/lib/search-session';
 
 /** 顶部导航：Logo、搜索框（首页外）、历史、设置 */
 export function Header({ showSearch = false }: { showSearch?: boolean }) {
@@ -25,7 +26,8 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
     const q = text.trim().slice(0, 100);
     if (!q) return;
     searchHistory.close();
-    router.push(`/?s=${encodeURIComponent(q)}`, { scroll: false });
+    useSearchSession.getState().setQuery(q);
+    router.push('/', { scroll: false });
     // 顶栏搜索一并写入最近搜索（此前只有首页会记录）
     searchHistory.record(q);
   };
@@ -39,7 +41,7 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
     <>
       <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-line">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
-          <Link href="/" aria-label="LibreTV 首页" className="flex items-center shrink-0">
+          <Link href="/" onClick={() => useSearchSession.getState().setQuery('')} aria-label="LibreTV 首页" className="flex items-center shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/icons/icon-512.png" alt="LibreTV" className="w-7 h-7 rounded-lg" />
           </Link>
@@ -97,6 +99,9 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
           <div className="flex-1 sm:hidden" />
 
           <nav className="flex items-center gap-1 ml-auto">
+            <HeaderLink href="/telegram" active={pathname === '/telegram'}>
+              短剧
+            </HeaderLink>
             <HeaderLink href="/live" active={pathname === '/live'}>
               直播
             </HeaderLink>
