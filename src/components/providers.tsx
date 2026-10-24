@@ -9,6 +9,7 @@ import { GlobalDownloadManager } from './download-manager';
 import { useAppStore, hydrateLiveProbeResults } from '@/lib/store';
 import { api, STATUS_QUERY_KEY } from '@/lib/client-api';
 import { applyEnvPresets } from '@/lib/subscription-sync';
+import { firstVisitSources } from '@/lib/source-catalog';
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -23,6 +24,13 @@ export function Providers({ children }: { children: ReactNode }) {
   // store 配置了 skipHydration：等挂载后再读 localStorage，
   // 保证 hydration 阶段客户端与服务端渲染结果一致。
   useEffect(() => {
+    let hasSavedSettings = true;
+    try { hasSavedSettings = localStorage.getItem('libretv-settings') !== null; } catch { /* Preserve settings if storage is unavailable. */ }
+    const initializeSources = () => {
+      for (const source of firstVisitSources(hasSavedSettings, useAppStore.getState())) {
+        useAppStore.getState().addCustomApi(source);
+      }
+    };
     // 先等持久化状态恢复，再拉服务端下发数据：
     // 避免 setEnvSources/setLiveEnvSources 的勾选合并发生在 rehydrate 之前被覆盖
     Promise.resolve(useAppStore.persist.rehydrate())
@@ -34,13 +42,14 @@ export function Providers({ children }: { children: ReactNode }) {
         // 与 AuthProvider 共用同一 query key，/api/status 全站只发一次
         return queryClient.fetchQuery({ queryKey: STATUS_QUERY_KEY, queryFn: () => api.status() });
       })
-      .then((d) => {
+      .then(async (d) => {
         // 预置数据（DEFAULT_SOURCES / DEFAULT_LIVE_SOURCES / DEFAULT_SUBSCRIPTIONS）
         // 预置订阅要经鉴权接口拉取，首屏这次可能发生在登录之前而 401 静默失败；
         // 登录成功后由 AuthProvider 再调一次 applyEnvPresets 补齐（函数幂等）
-        if (d) return applyEnvPresets(d);
+        if (d) await applyEnvPresets(d);
+        initializeSources();
       })
-      .catch(() => {});
+      .catch(() => initializeSources());
   }, [queryClient]);
 
   return (

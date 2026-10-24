@@ -7,6 +7,16 @@
 本机密码、订阅凭据、浏览器数据和运行缓存不包含在仓库中。部署时请自行配置环境变量；上游演示站和镜像不包含本仓库新增功能。
 
 
+## 本仓库首次使用
+
+请下载 [wang-D-ming/LibreTV](https://github.com/wang-D-ming/LibreTV) 的 main 分支并自行构建；上游的演示站、Docker 镜像和预构建包不包含本仓库的新增功能。
+
+- 首页默认展开“选择数据源”，随代码附带 31 个公共点播源，初次访问默认启用其中 3 个；已有设置不会被覆盖。
+- 选择“项目内置公共列表”即可勾选源，无需先连接 GitHub。也可切换到社区列表后点“一键刷新数据源”。
+- 数据源选择、个人订阅和历史保存在各自的浏览器里，不随代码同步。内置列表只包含公开接口，源站可用性以实际测试为准。
+- 可分享的公共列表：[public/sources.json](public/sources.json)；部署后也可通过站点的 /sources.json 下载。
+- 体育源测试入口：/live?test=sports。
+
 LibreTV Next.js 迁移版：免费在线视频聚合搜索与观看平台。基于 Next.js 15（App Router）+ TypeScript + Tailwind CSS，播放内核为 ArtPlayer + hls.js，支持亮暗双主题。
 
 > 🏠 **官网**：[LibreTV 官网](https://libretv.is-an.org/)
@@ -36,65 +46,25 @@ LibreTV Next.js 迁移版：免费在线视频聚合搜索与观看平台。基�
 
 ### Docker（推荐）
 
+在本仓库根目录创建 .env，设置自己的访问密码：
+
+```dotenv
+PASSWORD=your-own-password
+```
+
+首次部署及更新均从源码构建：
+
 ```bash
-# 在 .env 中设置 PASSWORD
-echo "PASSWORD=your-password" > .env
-
-# 方式一：拉取发布镜像（零构建）
-docker compose pull && docker compose up -d
-
-# 方式二：源码构建
+git clone https://github.com/wang-D-ming/LibreTV.git
+cd LibreTV
+# 在此目录创建上面的 .env 文件
 docker compose up -d --build
+# 后续更新：git pull，然后再次执行 docker compose up -d --build
 ```
 
-### Docker Compose
+仓库内的 docker-compose.yml 已设置从本地源码构建，镜像名为 libretv-wang-d-ming:local。使用 Docker Compose v2，不需要先执行 docker compose pull。不要替换为 ghcr.io/librespark/libretv 或 docker.io/bestzwei/libretv，这两个镜像属于上游原版。
 
-```yaml
-services:
-  libretv:
-    image: ghcr.io/librespark/libretv:latest
-    container_name: libretv
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      - PASSWORD=change-me   # 必填：访问密码，务必修改
-      # - PROXY_SECRET=your-secret          # 会话/代理签名密钥，多实例部署建议设置
-      # - DEFAULT_SOURCES=[{"name":"示例源","url":"https://example.com/api.php/provide/vod"}]
-      # - DEFAULT_LIVE_SOURCES=[{"name":"示例直播源","url":"https://example.com/list.m3u"}]
-      # - DEFAULT_SUBSCRIPTIONS=["https://example.com/sources.json"]  # 预置订阅，自动导入点播源+直播源
-      # - DEFAULT_RECOMMEND_SOURCE=douban  # 首页推荐数据源默认值（douban/bangumi/hot-list），仅对未主动选择过的用户生效
-      # - LIVE_ALLOW_PRIVATE=1              # 自建内网 IPTV 源时开启
-```
-
-> 其余可选变量见下方[环境变量](#环境变量)表；仓库内的 `docker-compose.yml` 含完整注释版本（含 `build: .` 源码构建分支）。
-
-```bash
-docker compose pull && docker compose up -d
-```
-
-> ⚠️ **生产部署必须通过 HTTPS 访问**（localhost 除外）：生产模式下会话 cookie 带 `Secure` 标记，浏览器只在 HTTPS（或 localhost）下保存它。因此用 `http://服务器IP:端口` 访问时，会出现"密码正确却无法登录"的现象——登录请求实际成功，但 cookie 被浏览器丢弃。请通过反向代理（Nginx / Caddy / Traefik）或 Cloudflare 等为站点套上 TLS 后再对外提供服务；本地开发用 `localhost` 不受影响。
-
-镜像发布在 GHCR 与 Docker Hub：`ghcr.io/librespark/libretv` 与 `docker.io/bestzwei/libretv`
-（`latest` / `主.次` / 完整版本号三个 tag，`linux/amd64` 与 `linux/arm64` 双架构，
-两个 registry 的镜像 digest 一致）。需要固定版本时在 `.env` 中设置
-`LIBRETV_IMAGE=ghcr.io/librespark/libretv:<版本>`。
-
-> 版本号以 `package.json` 为单一来源，部署后可用 `/api/status` 返回的 `version` 字段核对。详见[部署文档](https://libretv.is-an.org/wiki/Deployment.html)。
-
-### 免 Docker 运行（预构建包）
-
-每个版本都会在 [Releases](https://github.com/LibreSpark/LibreTV/releases) 附一个 `libretv-<版本>-standalone.tar.gz` 与对应的 `SHA256SUMS`，解压后直接用 Node 启动：
-
-```bash
-# 版本号替换为 Releases 中的实际版本（也可用 /api/status 返回的 version 核对）
-VER="<版本>"
-tar -xzf "libretv-${VER}-standalone.tar.gz" -C libretv
-cd libretv
-PASSWORD=your-password PORT=8080 node server.js
-```
-
-包内是 Next.js standalone 产物（`server.js` + `public` + 静态资源 + 运行时依赖），**与 CPU 架构无关**，x86_64 / arm64 / armv7 都能跑，适合用不了 Docker 的设备（如 ARMv7 路由器）。环境变量与 Docker 部署一致（`PASSWORD`、`PORT` 等），需要 Node 18+；包内不含 `sharp`（本项目不开图片优化，封面走代理原图）。
+访问 http://localhost:8080。远程部署请使用 HTTPS。其他可选配置可参考 .env.example 和 docker-compose.yml 的注释。
 
 ### 手动运行
 

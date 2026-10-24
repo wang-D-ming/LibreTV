@@ -5,7 +5,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/client-api';
-import { SOURCE_CATALOGS, mergeCatalogSources, sourceIdentity, type CatalogSource } from '@/lib/source-catalog';
+import { BUNDLED_CATALOG_URL, PUBLIC_SOURCES, SOURCE_CATALOGS, mergeCatalogSources, sourceIdentity, type CatalogSource } from '@/lib/source-catalog';
+import { parseSourceListPayload } from '@/lib/source-list';
 import { isInDisabledSubscription, isSourceDisabled, keyBelongsToSubscription, subKeyPrefix, useAppStore } from '@/lib/store';
 import { useAuth } from './auth';
 import { Icon } from './icon';
@@ -27,7 +28,7 @@ export function SourcePicker() {
   const queryClient = useQueryClient();
   const [catalogUrl, setCatalogUrl] = useState(SOURCE_CATALOGS[0].url);
   const [query, setQuery] = useState('');
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState(false);
@@ -44,7 +45,7 @@ export function SourcePicker() {
     return [...unique.values()];
   }, [store.subscriptions]);
   const cache = ready ? lists[catalogUrl] : undefined;
-  const all = ready ? mergeCatalogSources([...store.envSources, ...store.customAPIs], cache?.sources || []) : [];
+  const all = ready ? mergeCatalogSources([...store.envSources, ...store.customAPIs], cache?.sources || (catalogUrl === BUNDLED_CATALOG_URL ? PUBLIC_SOURCES : [])) : [];
   const visible = all.filter((s) => !(s.isAdult && store.yellowFilter) &&
     `${s.name} ${s.url}`.toLowerCase().includes(query.trim().toLowerCase()));
   const isActive = (s: CatalogSource & { key?: string }) => Boolean(s.key && store.selectedKeys.includes(s.key) &&
@@ -59,7 +60,12 @@ export function SourcePicker() {
     setMessage('');
     setError(false);
     try {
-      const result = await api.fetchSourceList(catalogUrl);
+      let result;
+      if (catalogUrl === BUNDLED_CATALOG_URL) {
+        const res = await fetch(BUNDLED_CATALOG_URL, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`公共列表读取失败 (${res.status})`);
+        result = parseSourceListPayload(await res.json());
+      } else result = await api.fetchSourceList(catalogUrl);
       if (!result.sources.length) throw new Error('这份列表没有点播源，请选择其他列表');
       const sources = mergeCatalogSources([], result.sources);
       useCatalogCache.getState().save(catalogUrl, { sources, updatedAt: Date.now() });
@@ -105,7 +111,7 @@ export function SourcePicker() {
         <button type="button" className="text-xs text-muted hover:text-accent" onClick={() => setManagerOpen(true)}>管理数据源</button>
       </div>
       {expanded && <div id="source-picker-panel" className="mt-3 space-y-3">
-        <p className="text-xs text-muted">刷新列表，勾选即用。可多选，选择会自动保存。</p>
+        <p className="text-xs text-muted">已内置公共源，勾选即用。首次访问默认启用 3 个，旧设置保留；远程列表可切换刷新。</p>
         <div className="flex flex-wrap gap-2">
           <select aria-label="数据源列表" value={catalogUrl} disabled={busy} onChange={(e) => { setCatalogUrl(e.target.value); setMessage(''); }} className="min-w-0 flex-1 rounded-lg border border-line bg-chip px-3 py-2 text-sm text-content">
             {catalogs.map((catalog) => <option key={catalog.url} value={catalog.url}>{catalog.name}</option>)}
