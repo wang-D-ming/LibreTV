@@ -403,12 +403,12 @@ const NDJSON_HEADERS = {
  * 相比整批等待最慢的一条，前端状态点可以边测边亮。
  * 客户端断开（切筛选/关页）时 req.signal 触发，worker 停止且不再写入。
  */
-function ndjsonResponse(urls: string[], reqSignal: AbortSignal): Response {
+function ndjsonResponse(urls: string[], reqSignal: AbortSignal, force = false): Response {
   const encoder = new TextEncoder();
   const cachedOutcomes: ProbeOutcome[] = [];
   const pending: string[] = [];
   for (const u of urls) {
-    const hit = cacheGet(u);
+    const hit = force ? undefined : cacheGet(u);
     if (hit) cachedOutcomes.push(hit);
     else pending.push(u);
   }
@@ -503,19 +503,20 @@ export async function POST(req: Request) {
     body.urls.filter((u): u is string => typeof u === 'string' && /^https?:\/\//.test(u))
   )].slice(0, MAX_URLS);
   const stream = new URL(req.url).searchParams.get('stream') === '1';
+  const force = new URL(req.url).searchParams.get('force') === '1';
   if (urls.length === 0) {
     return stream
       ? new NextResponse('', { headers: NDJSON_HEADERS })
       : NextResponse.json({ results: [] });
   }
 
-  if (stream) return ndjsonResponse(urls, req.signal);
+  if (stream) return ndjsonResponse(urls, req.signal, force);
 
   const outcomes = new Map<string, ProbeOutcome>();
   // 先命中缓存，减少需要真实探测的目标
   const pending: string[] = [];
   for (const u of urls) {
-    const hit = cacheGet(u);
+    const hit = force ? undefined : cacheGet(u);
     if (hit) outcomes.set(u, hit);
     else pending.push(u);
   }

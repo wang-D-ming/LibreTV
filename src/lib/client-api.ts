@@ -1,6 +1,7 @@
 'use client';
 
 import type { SearchResponse, SearchStreamEvent, SourceSearchOutcome, VideoDetail, DoubanResponse, BangumiCalendarResponse, AuthStatusResponse, SourceConfig, SearchResultItem, LivePlaylistResponse, LiveEpgResponse, SourceListPayload, QualityProbeItem, QualityProbeResult } from './types';
+import type { BrowseCategory } from './browse-categories';
 
 /**
  * 客户端 API 封装。401 时触发全局事件打开登录框，
@@ -126,7 +127,7 @@ export const api = {
     wd: string,
     sources: SourceConfig[],
     filterAdult: boolean,
-    opts?: { signal?: AbortSignal; onSource?: (outcome: SourceSearchOutcome) => void }
+    opts?: { mode?: 'title' | 'smart'; signal?: AbortSignal; onSource?: (outcome: SourceSearchOutcome) => void }
   ): Promise<SearchResponse> => {
     const signal = opts?.signal;
     const onSource = opts?.onSource;
@@ -134,11 +135,11 @@ export const api = {
       return request<SearchResponse>('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wd, sources, filterAdult }),
+        body: JSON.stringify({ wd, sources, filterAdult, mode: opts?.mode }),
         signal,
       });
     }
-    return searchStream(wd, sources, filterAdult, onSource, signal);
+    return searchStream(wd, sources, filterAdult, onSource, signal, opts?.mode);
   },
 
   detail: (id: string, source: SourceConfig, signal?: AbortSignal) => {
@@ -229,6 +230,18 @@ export const api = {
       body: JSON.stringify({ url }),
     }),
 
+  categories: (source: SourceConfig, refresh = false, signal?: AbortSignal) =>
+    request<{ categories: BrowseCategory[] }>('/api/browse', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source, refresh }), signal,
+    }),
+
+  browse: (source: SourceConfig, category: string, page: number, signal?: AbortSignal) =>
+    request<{ list: SearchResultItem[]; category: BrowseCategory; page: number; pageCount: number; total: number | null }>('/api/browse', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source, category, page }), signal,
+    }),
+
   /** 拉取远程数据源订阅（自动识别 LibreTV-SourceList JSON 与 TVBOX 配置 JSON） */
   fetchSourceList: (url: string) => {
     const sp = new URLSearchParams({ url });
@@ -299,9 +312,10 @@ export const api = {
   liveProbeStream: async (
     urls: string[],
     onResult: (result: LiveProbeResult) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    force = false
   ): Promise<void> => {
-    const res = await fetch('/api/live/probe?stream=1', {
+    const res = await fetch('/api/live/probe?stream=1' + (force ? '&force=1' : ''), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ urls }),
@@ -326,12 +340,13 @@ async function searchStream(
   sources: SourceConfig[],
   filterAdult: boolean,
   onSource: (outcome: SourceSearchOutcome) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  mode?: 'title' | 'smart'
 ): Promise<SearchResponse> {
   const res = await fetch('/api/search?stream=1', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wd, sources, filterAdult }),
+    body: JSON.stringify({ wd, sources, filterAdult, mode }),
     signal,
   });
     throwForAuthStatus(res);

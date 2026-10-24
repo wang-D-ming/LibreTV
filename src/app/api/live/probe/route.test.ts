@@ -39,9 +39,9 @@ function mockUpstream(): { fn: ReturnType<typeof vi.fn> } {
   return { fn };
 }
 
-function makeRequest(urls: string[], stream: boolean): Request {
+function makeRequest(urls: string[], stream: boolean, force = false): Request {
   const { token } = signSession();
-  return new Request(`https://local.test/api/live/probe${stream ? '?stream=1' : ''}`, {
+  return new Request(`https://local.test/api/live/probe?stream=${stream ? '1' : '0'}${force ? '&force=1' : ''}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -289,3 +289,19 @@ describe('POST /api/live/probe', () => {
     }
   });
 });
+
+for (const stream of [true, false]) {
+  it('force=1 skips cached success and detects a newly failing source, stream=' + stream, async () => {
+    const { fn } = mockUpstream();
+    const url = 'https://iptv.test/master.m3u8?refresh-test=' + stream;
+    await (await POST(makeRequest([url], stream))).text();
+    fn.mockImplementation(async () => new Response('gone', { status: 404 }));
+    const cached = await POST(makeRequest([url], stream));
+    const cachedResult = stream ? (await readNdjson(cached))[0] : (await cached.json()).results[0];
+    expect(cachedResult.ok).toBe(true);
+    const fresh = await POST(makeRequest([url], stream, true));
+    const freshResult = stream ? (await readNdjson(fresh))[0] : (await fresh.json()).results[0];
+    expect(freshResult.ok).toBe(false);
+    expect(freshResult.status).toBe(404);
+  });
+}

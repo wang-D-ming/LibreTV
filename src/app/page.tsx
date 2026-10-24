@@ -16,6 +16,8 @@ import { useToast } from '@/components/toast';
 import { EmptyState } from '@/components/states';
 import { Icon } from '@/components/icon';
 import { SiteFooter } from '@/components/site-footer';
+import { SourcePicker } from '@/components/source-picker';
+import { CategoryBrowser } from '@/components/category-browser';
 
 /**
  * 首页：搜索（URL ?s= 驱动，可后退/分享）+ 豆瓣推荐。
@@ -37,6 +39,7 @@ function HomeContent() {
   const router = useRouter();
   const { toast } = useToast();
   const urlQuery = searchParams.get('s') || '';
+  const searchMode = searchParams.get('mode') === 'title' ? 'title' : 'smart';
   // 精确订阅所需字段（对齐 live 页的做法）：搜索流式期间逐源写健康度、
   // 打开设置抽屉/历史面板等无关 store 变化，都不应触发首页整树重渲染
   const customAPIs = useAppStore((s) => s.customAPIs);
@@ -46,6 +49,7 @@ function HomeContent() {
   const sourceHealth = useAppStore((s) => s.sourceHealth);
   const subscriptions = useAppStore((s) => s.subscriptions);
   const [input, setInput] = useState(urlQuery);
+  const [homeView, setHomeView] = useState<'categories' | 'recommend'>('categories');
   const [detailItem, setDetailItem] = useState<SearchResultItem | null>(null);
   /** 流式搜索中已结算的源（data 就绪前用于增量渲染） */
   const [streamedOutcomes, setStreamedOutcomes] = useState<SourceSearchOutcome[]>([]);
@@ -91,12 +95,14 @@ function HomeContent() {
   );
 
   const searchQuery = useQuery({
-    queryKey: ['search', urlQuery, selectedKeys, yellowFilter],
+    queryKey: ['search', urlQuery, searchMode, selectedKeys.map((key) => resolveSource({ customAPIs, envSources }, key)), yellowFilter,
+      subscriptions.map(({ url, enabled }) => ({ url, enabled }))],
     // 与 runSearch 的截断规则保持一致：顶栏搜索 / 手动构造长链接不会绕过上限
     queryFn: ({ signal }) => {
       setStreamedOutcomes([]);
       return api.search(urlQuery.slice(0, 100), selectedSources, yellowFilter, {
         signal,
+        mode: searchMode,
         // 逐源结算即更新：结果边搜边渲染，同时滚动健康度
         onSource: (outcome) => {
           setStreamedOutcomes((prev) => [...prev, outcome]);
@@ -127,10 +133,10 @@ function HomeContent() {
       return;
     }
     if (selectedSources.length === 0) {
-      toast('请先在设置中添加并勾选点播源', 'warning');
+      toast('请在搜索框下方刷新数据源并勾选一个源', 'warning');
       return;
     }
-    router.push(`/?s=${encodeURIComponent(query)}`, { scroll: false });
+    router.push(`/?s=${encodeURIComponent(query)}&mode=${searchMode}`, { scroll: false });
     searchHistory.record(query);
   };
 
@@ -216,7 +222,7 @@ function HomeContent() {
                 <input
                   ref={inputRef}
                   className="flex-1 min-w-0 pr-2 bg-transparent text-sm text-content placeholder:text-faint focus:outline-none"
-                  placeholder="输入影片名称..."
+                  placeholder={searchMode === 'smart' ? '描述想看的内容，如：重生复仇的短剧' : '输入影片名称...'}
                   value={input}
                   maxLength={100}
                   onChange={(e) => {
@@ -278,6 +284,11 @@ function HomeContent() {
               />
             )}
           </div>
+          <div className="mt-3 flex gap-3" role="group" aria-label="搜索方式">
+            {(['smart', 'title'] as const).map(mode => <button key={mode} type="button" aria-pressed={searchMode === mode} className={searchMode === mode ? 'text-sm text-accent font-semibold' : 'text-sm text-muted'} onClick={() => router.push('/?' + new URLSearchParams({ ...(urlQuery ? { s: urlQuery } : {}), mode }), { scroll: false })}>{mode === 'smart' ? '智能搜索' : '片名搜索'}</button>)}
+          </div>
+          {searchMode === 'smart' && <p className="mt-2 text-xs text-muted max-w-2xl text-center">按常见题材同义词、简介、类型、演员和导演匹配。搜索范围为源站返回及近期搜索内容，并非全片库；可尝试“搞笑的电影”“周星驰主演的喜剧”。</p>}
+          <SourcePicker />
         </section>
 
         {/* 搜索结果 */}
@@ -366,12 +377,18 @@ function HomeContent() {
 
         {/* 首页推荐（有搜索时隐藏） */}
         {!urlQuery && (
-          <RecommendSection
+          <>
+          <div className="flex gap-3 mb-5 border-b border-line pb-3">
+            <button type="button" aria-pressed={homeView === 'categories'} className={homeView === 'categories' ? 'text-accent font-semibold' : 'text-muted'} onClick={() => setHomeView('categories')}>分类找片</button>
+            <button type="button" aria-pressed={homeView === 'recommend'} className={homeView === 'recommend' ? 'text-accent font-semibold' : 'text-muted'} onClick={() => setHomeView('recommend')}>热门推荐</button>
+          </div>
+          {homeView === 'categories' ? <CategoryBrowser sources={selectedSources} onOpen={setDetailItem} /> : <RecommendSection
             onPick={(title) => {
               setInput(title);
               runSearch(title);
             }}
-          />
+          />}
+          </>
         )}
       </main>
 
@@ -407,12 +424,10 @@ function NoSourceGuide({ hasSources = false }: { hasSources?: boolean }) {
       <h3 className="text-content font-medium mb-2">{hasSources ? '尚未勾选点播源' : '先添加一个点播源'}</h3>
       <p className="text-sm text-muted leading-relaxed">
         {hasSources ? (
-          <>点击右上角「设置」，勾选要参与搜索的点播源后重新搜索。</>
+          <>在搜索框下方勾选数据源，搜索结果会自动更新。</>
         ) : (
           <>
-            LibreTV 不内置任何采集站。点击右上角「设置 → 添加 API」，填入一个
-            Apple CMS 采集站地址（如 <code className="text-accent text-xs">https://example.com/api.php/provide/vod</code>），
-            勾选后即可开始搜索。
+            在搜索框下方点击「一键刷新数据源」，勾选后即可搜索。也可以通过「管理数据源」添加自己的源。
           </>
         )}
       </p>

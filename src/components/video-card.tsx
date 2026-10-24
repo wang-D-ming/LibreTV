@@ -210,6 +210,7 @@ export function AggregatedCard({
               )}
             </div>
             <p className="text-xs text-muted line-clamp-2 mb-2">{group.remarks || '暂无介绍'}</p>
+            {group.items[0].matchReasons?.length ? <p className="text-xs text-accent line-clamp-2 mb-2">{group.items[0].matchReasons.join(' · ')}</p> : null}
           </div>
           <div className="flex items-center justify-between gap-1.5 mt-auto pt-1.5 border-t border-line">
             <span className="tag bg-chip text-muted truncate max-w-[80%]">

@@ -212,3 +212,17 @@ describe('POST /api/search', () => {
     expect(unauthorized.status).toBe(401);
   });
 });
+
+it('smart search matches synopsis in JSON and stream, while title search stays strict', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(cmsList([
+    { vod_id: 91, vod_name: '昨日重来', type_name: '短剧', vod_content: '重活一世，报仇雪恨' },
+    { vod_id: 92, vod_name: '其他故事', type_name: '剧情片' },
+  ]), { headers: { 'content-type': 'application/json' } })));
+  const body = { wd: '重生复仇的短剧', sources: [SOURCES[0]], mode: 'smart' };
+  const data = await (await POST(makeRequest(body))).json();
+  expect(data.list.map((i: { vodId: string }) => i.vodId)).toEqual(['91']);
+  const stream = await (await POST(makeRequest(body, true))).text();
+  expect(JSON.parse(stream.trim()).list[0].matchReasons).toContain('简介：重生');
+  const title = await (await POST(makeRequest({ ...body, mode: 'title' }))).json();
+  expect(title.list).toEqual([]);
+});

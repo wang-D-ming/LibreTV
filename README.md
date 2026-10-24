@@ -1,5 +1,12 @@
 # LibreTV
 
+本仓库基于 [LibreSpark/LibreTV](https://github.com/LibreSpark/LibreTV) 2.21.0 改造，保留 AGPL-3.0 许可证。
+
+新增功能：页面选择及刷新数据源、按源站分类浏览、结合简介和题材同义词的智能搜索、体育直播源测试。智能搜索使用本地规则，不依赖大模型；直播源是否可用、清晰度及赛事覆盖需要实际验证。
+
+本机密码、订阅凭据、浏览器数据和运行缓存不包含在仓库中。部署时请自行配置环境变量；上游演示站和镜像不包含本仓库新增功能。
+
+
 LibreTV Next.js 迁移版：免费在线视频聚合搜索与观看平台。基于 Next.js 15（App Router）+ TypeScript + Tailwind CSS，播放内核为 ArtPlayer + hls.js，支持亮暗双主题。
 
 > 🏠 **官网**：[LibreTV 官网](https://libretv.is-an.org/)

@@ -12,3 +12,8 @@ vitest-results.json
 .zcode/
 .codebuddy/
 generated-images/
+
+# Local runtime and machine-specific launch files
+.local/
+Start-LibreTV.cmd
+LOCAL-README.txt

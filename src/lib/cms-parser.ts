@@ -40,10 +40,19 @@ export function parseSearchList(
       year: typeof vod.vod_year === 'string' ? vod.vod_year : undefined,
       area: typeof vod.vod_area === 'string' ? vod.vod_area : undefined,
       remarks: typeof vod.vod_remarks === 'string' ? vod.vod_remarks : undefined,
+      description: cleanSearchText(vod.vod_content ?? vod.vod_blurb),
+      actor: cleanSearchText(vod.vod_actor),
+      director: cleanSearchText(vod.vod_director),
       sourceUrl: source.url,
       isAdult: source.isAdult,
     };
   });
+}
+
+function cleanSearchText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  return value.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ').replace(/&(?:nbsp|amp|quot|lt|gt);/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000) || undefined;
 }
 
 /**

@@ -17,6 +17,7 @@ const LivePlayer = dynamic(() => import('@/components/live-player').then((m) => 
   ),
 });
 import { LiveChannelList, type LiveChannelItem } from '@/components/live-channel-list';
+const SportsSourceTester = dynamic(() => import('@/components/sports-source-tester').then(m => m.SportsSourceTester), { ssr: false, loading: () => <p className="text-sm text-muted mb-4">正在打开体育源测试…</p> });
 import { LiveEpgPanel } from '@/components/live-epg-panel';
 import { Spinner } from '@/components/states';
 import { useAuth } from '@/components/auth';
@@ -50,6 +51,7 @@ function LiveContent() {
   const customImageProxy = useAppStore((s) => s.customImageProxy);
   const { verified } = useAuth();
   const [copied, setCopied] = useState(false);
+  const [sportsOpen, setSportsOpen] = useState(searchParams.get('test') === 'sports');
   // 移动端频道抽屉开合
   const [listOpen, setListOpen] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
@@ -221,6 +223,11 @@ function LiveContent() {
     <div className="min-h-screen flex flex-col">
       <Header showSearch />
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-4">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h1 className="font-semibold text-content">电视直播</h1>
+          <button type="button" className="btn-ghost btn-sm" aria-expanded={sportsOpen} onClick={() => setSportsOpen(v => !v)}>{sportsOpen ? '收起体育源测试' : '体育源测试'}</button>
+        </div>
+        {sportsOpen && <SportsSourceTester onWatch={(source) => { selectChannel({id: source.url, ...source, group: '体育测试'}); setSportsOpen(false); }} />}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
           {/* 主栏：播放器 + 信息条 + 节目单 */}
           <div className="min-w-0">

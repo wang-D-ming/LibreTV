@@ -20,6 +20,11 @@ export interface SearchResultItem {
   year?: string;
   area?: string;
   remarks?: string;
+  description?: string;
+  actor?: string;
+  director?: string;
+  matchReasons?: string[];
+  relevanceScore?: number;
   /** 自定义源的 API 地址，详情请求需要 */
   sourceUrl?: string;
   isAdult?: boolean;
